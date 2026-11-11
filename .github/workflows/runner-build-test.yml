@@ -1,0 +1,36 @@
+name: runner build test
+
+on:
+  push:
+    branches:
+      - export-gate-runner-test
+
+permissions:
+  contents: read
+
+jobs:
+  # Test only: can the mirror build on the bare ubuntu-latest runner, with no apt?
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: What the runner has
+        run: |
+          g++ --version | head -1; git --version; make --version | head -1
+          for p in zlib1g-dev libuv1-dev libcurl4-openssl-dev libcurl4-gnutls-dev libavcodec-dev libavformat-dev libswresample-dev libfreetype-dev libglfw3-dev; do printf "%s: " $p; dpkg-query -W -f='${Status} ${Version}\n' $p 2>/dev/null || echo "not installed"; done
+          for m in zlib libuv libcurl libavcodec freetype2; do printf "pkg-config %s: " $m; pkg-config --modversion $m 2>/dev/null || echo no; done
+      - name: Filter the tree
+        env:
+          FILTER_BRANCH_SQUELCH_WARNING: 1
+        run: |
+          cp -r .github/filter-support .github/scripts/update-submodules.sh /tmp
+          /tmp/filter-support/filter.sh
+          git log -1 --format='filtered %H, tree %T'
+      - name: Fetch the mirror's submodules
+        run: /tmp/update-submodules.sh
+      - name: Build
+        run: make -j 2
+      - name: Tools
+        run: ls -l authoring exe2elf exe2exe exe2iso midi2psm midi2spd modconv ps1-packer psyq-obj-parser
