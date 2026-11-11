@@ -66,8 +66,20 @@ jobs:
 
   export-support:
     runs-on: ubuntu-latest
+    # The plain image support-mirror.yml builds the mirror in, so the build
+    # before the push is the one pull requests get.
+    container:
+      image: ubuntu:26.04
 
     steps:
+      # Before the checkout, which without git fetches the files through the
+      # REST API, with no history for filter-branch to rewrite.
+      - name: Install git and the mirror's build dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git g++ make pkg-config zlib1g-dev
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -75,8 +87,16 @@ jobs:
         env:
           FILTER_BRANCH_SQUELCH_WARNING: 1
         run: |
-          cp -rv .github/filter-support /tmp
+          # The workspace is the runner user's and the container runs as root,
+          # and checkout's safe.directory is in a global config of its own step.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          cp -rv .github/filter-support .github/scripts/update-submodules.sh /tmp
           /tmp/filter-support/filter.sh
+      # The mirror is pushed only if it builds, the way its users build it.
+      - name: Fetch the mirror's submodules
+        run: /tmp/update-submodules.sh
+      - name: Build the mirror
+        run: make -j 2
       - name: Pushing result
         env:
           PAT: ${{ secrets.EXPORT_PAT }}
