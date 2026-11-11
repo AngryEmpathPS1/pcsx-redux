@@ -11,14 +11,18 @@ permissions:
 jobs:
   # Test only: can the mirror build on the bare ubuntu-latest runner, with no apt?
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: What the runner has
         run: |
-          g++ --version | head -1; git --version; make --version | head -1
+          grep PRETTY /etc/os-release; g++ --version | head -1; git --version; make --version | head -1
           for p in zlib1g-dev libuv1-dev libcurl4-openssl-dev libcurl4-gnutls-dev libavcodec-dev libavformat-dev libswresample-dev libfreetype-dev libglfw3-dev; do printf "%s: " $p; dpkg-query -W -f='${Status} ${Version}\n' $p 2>/dev/null || echo "not installed"; done
           for m in zlib libuv libcurl libavcodec freetype2; do printf "pkg-config %s: " $m; pkg-config --modversion $m 2>/dev/null || echo no; done
       - name: Filter the tree
