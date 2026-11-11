@@ -1,0 +1,40 @@
+name: export gate test
+
+on:
+  push:
+    branches:
+      - export-gate-test-*
+
+permissions:
+  contents: read
+
+jobs:
+  export-support:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Name the tested branch main (test only)
+        run: git -c safe.directory="$GITHUB_WORKSPACE" checkout -B main && git -c safe.directory="$GITHUB_WORKSPACE" log --oneline -3
+      - name: Filter repository
+        env:
+          FILTER_BRANCH_SQUELCH_WARNING: 1
+        run: |
+          cp -rv .github/filter-support .github/scripts/update-submodules.sh /tmp
+          /tmp/filter-support/filter.sh
+      # Pushed only if it builds, the way its users build it. The runner has
+      # what Makefile-filtered asks for and none of libuv, curl or ffmpeg, so
+      # this installs nothing; support-mirror.yml checks it in a plain image.
+      - name: Fetch the mirror's submodules
+        run: /tmp/update-submodules.sh
+      - name: Build the mirror
+        run: make -j 2
+      - name: Pushing result
+        env:
+          PAT: ${{ secrets.EXPORT_PAT }}
+        run: |
+          git config -l | grep 'http\..*\.extraheader' | cut -d= -f1 | xargs -L1 git config --unset-all
+          git init -q --bare /tmp/support.git && git remote add support /tmp/support.git
+          git push --force /tmp/support.git main && git -C /tmp/support.git log -1 --format="pushed main %H, tree %T" main
